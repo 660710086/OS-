@@ -4,11 +4,19 @@ import java.io.*;
 import java.net.*;
 import java.nio.channels.Channels;
 import java.nio.channels.FileChannel;
+import java.nio.channels.SocketChannel;
 import java.nio.file.StandardOpenOption;
 
 public class FileServer {
+    private Socket socket;
+    private DataInputStream fromServer;
+    private DataOutputStream toServer;
+    private SocketChannel socketChannel;
+    private final String folder = "C:/Documents/os";
+    private final String IPADDRESS = "192.168.56.1";
+    private final int PORT = 8000;
+    private final int PORTCHANNEl = 8001;
 
-    private static final int PORT = 5000;
 
     public static void main(String[] args) throws IOException {
         ServerSocket serverSocket = new ServerSocket(PORT);
@@ -64,9 +72,12 @@ public class FileServer {
             }
             System.out.println("File sent using NORMAL method.");
         } catch (IOException e) {
-            e.printStackTrace();
+            System.out.println("Error in sendFileNormal");
         }
     }
+
+
+
 
     private static void sendFileZeroCopy(File file, Socket socket) {
         try (
@@ -84,6 +95,22 @@ public class FileServer {
             System.out.println("File sent using ZERO-COPY method.");
         } catch (IOException e) {
             e.printStackTrace();
+        }
+    }
+
+
+    public void disconnect(){
+        try{
+            if(fromServer != null)
+                fromServer.close();
+            if(toServer != null)
+                toServer.close();
+            if(socket != null)
+                socket.close();
+            if(socketChannel != null)
+                socketChannel.close();
+        } catch (IOException e){
+            System.out.println("Error in disconnect");
         }
     }
 }
