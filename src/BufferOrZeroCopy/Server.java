@@ -16,7 +16,7 @@ public class Server {
     private final String IPADDRESS = "192.168.56.1";
     private final int PORT = 3301;
     private final int PORTCHANNEL = 3302;
-
+    private final File fil = new File(folder);
 
     public Server(){
         connectToServer();
@@ -137,4 +137,44 @@ public class Server {
             System.out.println("Error in disconnect");
         }
     }
+
+    class ClientHandle implements Runnable {
+
+        private final int clientNo;
+        private final Socket socket;
+        private final DataInputStream fromClient;
+        private final DataOutputStream toClient;
+        private final SocketChannel socketChannel;
+
+        public ClientHandle(int clientNo, Socket socket) throws IOException {
+            this.clientNo = clientNo;
+            this.socket = socket;
+            this.fromClient = new DataInputStream(socket.getInputStream());
+            this.toClient = new DataOutputStream(socket.getOutputStream());
+            this.socketChannel = SocketChannel.open(new InetSocketAddress(IPADDRESS, PORTCHANNEL));
+
+        }
+
+        @Override
+        public void run() {
+
+            try {
+                while (true) {
+                    int index = fromClient.readInt();
+                    String type = fromClient.readUTF();
+                   String filePath = fil.getAbsolutePath();
+                    long size = fil.length();
+                    toClient.writeLong(size);
+                    System.out.println("Client " + clientNo + " request "+(!type.equals("1") ? "zero " : "")+"copy file : " + fil.getName());
+                    if(type.equals("1"))
+                        copy(filePath, size);
+                    else
+                        zeroCopy(filePath, size);
+                }
+            } catch (IOException ex) {
+                disconnect();
+            }
+        }
+    }
+
 }
