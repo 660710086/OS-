@@ -65,6 +65,51 @@ public class Server {
         }
     }
 
+    class ClientHandle implements Runnable {
+
+        private final int clientNo;
+        private final Socket socket;
+        private final DataInputStream fromClient;
+        private final DataOutputStream toClient;
+        private final SocketChannel socketChannel;
+
+
+        public ClientHandle(Socket socket, DataInputStream fromClient, DataOutputStream toClient,
+                            SocketChannel socketChannel, int clientNo, File[] fileList) {
+            this.socket = socket;
+            this.fromClient = fromClient;
+            this.toClient = toClient;
+            this.socketChannel = socketChannel;
+            this.clientNo = clientNo;
+
+        }
+
+
+
+        @Override
+        public void run() {
+
+            try {
+                while (true) {
+                    int index = fromClient.readInt();
+                    String type = fromClient.readUTF();
+                    String filePath = fil.getAbsolutePath();
+                    long size = fil.length();
+                    toClient.writeLong(size);
+                    System.out.println("Client " + clientNo + " request "+(!type.equals("1") ? "zero " : "")+"copy file : " + fil.getName());
+                    if(type.equals("1"))
+                        copy(filePath, size);
+                    else
+                        zeroCopy(filePath, size);
+                }
+            } catch (IOException ex) {
+                System.out.println("Client " + clientNo + " disconnected");
+            }
+        }
+
+    }
+
+
 
 
 }
