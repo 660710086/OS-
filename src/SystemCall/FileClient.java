@@ -2,59 +2,96 @@ package SystemCall;
 
 import java.io.*;
 import java.net.*;
+import java.nio.channels.*;
 import java.util.Scanner;
 
 public class FileClient {
+    String host;
+    int port;
 
-    private static final String SERVER_IP = "localhost";
-    private static final int SERVER_PORT = 5000;
+    public FileClient(String host, int port) {
+        this.host = host;
+        this.port = port;
+    }
 
-    static void main(String[] args) {
-        try (
-                Socket socket = new Socket(SERVER_IP, SERVER_PORT);
-                BufferedReader in = new BufferedReader(new InputStreamReader(socket.getInputStream()));
-                DataOutputStream out = new DataOutputStream(socket.getOutputStream())
-        ) {
-            Scanner scanner = new Scanner(System.in);
+    public void sendFile(String localFilePath, boolean zeroCopy) throws IOException {
+        File file = new File(localFilePath);
+        String mode = zeroCopy ? "ZEROCOPY" : "COPY";
 
-            System.out.print("Enter file name to download: ");
-            String fileName = scanner.nextLine();
+        try (SocketChannel sc = SocketChannel.open(new InetSocketAddress(host, port))) {
+            Socket socket = sc.socket();
 
-            System.out.print("Choose mode (normal/zerocopy): ");
-            String mode = scanner.nextLine();
+            DataOutputStream dos = new DataOutputStream(socket.getOutputStream());
+            DataInputStream dis = new DataInputStream(socket.getInputStream());
 
-            // ส่งชื่อไฟล์และโหมดการดาวน์โหลด
-            out.writeBytes(fileName + "\n");
-            out.writeBytes(mode + "\n");
-
-            // อ่านการตอบกลับ
-            String response = in.readLine();
-            if ("NOT_FOUND".equals(response)) {
-                System.out.println("File not found on server.");
-                return;
-            } else if (!"FOUND".equals(response)) {
-                System.out.println("Unexpected response from server.");
-                return;
+            dos.writeUTF(mode);
+            dos.writeUTF(file.getName());
+            dos.writeLong(file.length());
+            long startNs = System.nanoTime();
+            if (zeroCopy) {
+                sendFileZeroCopy(sc, file);
+                long elapsedNs = System.nanoTime() - startNs;
+                System.out.println("TYPE : ZEROCOPY ");
+                System.out.printf("| total: %.3f ms%n", elapsedNs / 1_000_000.0);
+            } else {
+                sendFileCopy(dos, file);
+                long elapsedNs = System.nanoTime() - startNs;
+                System.out.println("TYPE : COPY ");
+                System.out.printf("| total: %.3f ms%n", elapsedNs / 1_000_000.0);
             }
 
-            // รับไฟล์และบันทึก
-            receiveFile(socket.getInputStream(), "downloaded_" + fileName);
-
-        } catch (IOException e) {
-            e.printStackTrace();
+            String response = dis.readUTF();
+            System.out.println("Server response: " + response);
+            System.out.println("โหลดเสร็จแล้วจร้า");
         }
     }
 
-    private static void receiveFile(InputStream inputStream, String saveAs) {
-        try (FileOutputStream fileOut = new FileOutputStream(saveAs)) {
-            byte[] buffer = new byte[4096];
-            int bytesRead;
-            while ((bytesRead = inputStream.read(buffer)) != -1) {
-                fileOut.write(buffer, 0, bytesRead);
+    private void sendFileCopy(DataOutputStream dos, File file) throws IOException {
+        try (FileInputStream fis = new FileInputStream(file)) {
+            byte[] buffer = new byte[8192];
+            int read;
+            while ((read = fis.read(buffer)) != -1) {
+                dos.write(buffer, 0, read);
             }
-            System.out.println("File downloaded and saved as " + saveAs);
-        } catch (IOException e) {
-            e.printStackTrace();
         }
+    }
+
+    private void sendFileZeroCopy(SocketChannel sc, File file) throws IOException {
+        try (FileChannel fc = new FileInputStream(file).getChannel()) {
+            long position = 0;
+            long size = fc.size();
+            while (position < size) {
+                long transferred = fc.transferTo(position, size - position, sc);
+                if (transferred <= 0) break;
+                position += transferred;
+            }
+        }
+    }
+
+    public static void main(String[] args) throws IOException {
+        String host = "localhost";
+        int port = 9000;
+        String filePath = "B:/3Y/OS/เอกสารประกอบการสอน OS บท1-6.pdf";
+        File file = new File(filePath);
+        if (!file.exists()) {
+            System.out.println("ไม่พบไฟล์: " + file.getAbsolutePath());
+            return;
+        }
+
+        Scanner scanner = new Scanner(System.in);
+        System.out.println("1:zerocopy | 2.copy");
+        int choice = scanner.nextInt();
+        boolean zeroCopy = false;// false = Copy ปกติ
+        if (choice != 1 && choice != 2) {
+            System.out.println("Error: invalid choice");
+        } else if (choice == 1) {
+            zeroCopy = true; // true = ใช้ ZeroCopy, false = Copy ปกติ
+            new FileClient(host, port).sendFile(filePath, zeroCopy);
+        }else {
+            new FileClient(host, port).sendFile(filePath, zeroCopy);
+        }
+
+
+
     }
 }
